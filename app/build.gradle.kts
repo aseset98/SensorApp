@@ -68,10 +68,13 @@ dependencies {
     implementation("androidx.compose.foundation:foundation:1.0.1")
     implementation("androidx.compose.material:material:1.0.1")
     implementation("androidx.navigation:navigation-compose:2.3.5")
+    implementation ("androidx.lifecycle:lifecycle-runtime:2.3.1")
+    implementation ("androidx.compose.material:material:1.3.1")
    // implementation("com.google.firebase:firebase-firestore:24.1.0")
 
     implementation(libs.androidx.navigation.runtime.ktx)
     implementation(libs.firebase.firestore.ktx)
+    implementation(libs.androidx.constraintlayout.compose)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
