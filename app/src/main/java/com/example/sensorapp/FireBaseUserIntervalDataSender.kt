@@ -6,7 +6,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.*
 import javax.inject.Inject
 
-class FirebaseDataSender @Inject constructor(
+
+class FireBaseUserIntervalDataSender @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val sensorDataManager: SensorDataManager
 ) {
@@ -17,7 +18,7 @@ class FirebaseDataSender @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.IO)
     private var job: Job? = null
 
-    fun startSendingData(): Job {
+    fun startSendingData(userInterval: Int): Job {
         firestore.clearPersistence()
 
         job = scope.launch {
@@ -33,8 +34,8 @@ class FirebaseDataSender @Inject constructor(
                     "timestamp" to FieldValue.serverTimestamp()
                 )
 
-                firestore.collection("real_time_sensor_data").add(document)
-                delay(1000)  // Wait 1 sec before sending the next batch of data
+                firestore.collection("user_interval_sensor_data").add(document)
+                delay(userInterval * 1000L)  // Convert interval from seconds to milliseconds
             }
         }
         return job!!

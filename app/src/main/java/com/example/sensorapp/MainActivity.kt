@@ -57,12 +57,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import com.google.firebase.auth.FirebaseAuth
 
 
 class MainActivity : ComponentActivity() {
@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
                     MeasurementSelectScreen(navController)
                 }
                 composable("periodic_measure") {
-                    PeriodicMeasurementSending(navController)
+                    RealTimeMeasurementSending(navController)
                 }
                 composable("user_defined_measure") {
                     UserDefinedIntervalMeasurementSending(navController)
@@ -506,7 +506,7 @@ fun MeasurementSelectScreen(navController: NavController) {
         Spacer(modifier = Modifier.height(24.dp))
         SensorDataCard(title = "Light Data", data = lightData.value)
 
-        Spacer(modifier = Modifier.height(64.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         // Measurement type selection text with styling
         Text(
@@ -515,18 +515,42 @@ fun MeasurementSelectScreen(navController: NavController) {
             modifier = Modifier.padding(horizontal = 16.dp)
         )
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Buttons with styling
         RoundedButton(onClick = {
             navController.navigate("periodic_measure")
-        }, text = "Periodic Measuring")
+        }, text = "Real Time Measuring")
 
         Spacer(modifier = Modifier.height(16.dp))
 
         RoundedButton(onClick = {
             navController.navigate("user_defined_measure")
         }, text = "User Defined Interval Measuring")
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Or",
+            style = MaterialTheme.typography.bodyLarge.copy(color = Color.White),
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Log Out Button
+        RoundedButton(
+            onClick = {
+                // Sign out the user
+                FirebaseAuth.getInstance().signOut()
+                // Navigate to the login screen or any other appropriate screen
+                navController.navigate("main") {
+                    popUpTo(navController.graph.startDestinationId) {
+                        inclusive = true // Clear the back stack
+                    }
+                }
+            },
+             text = "Log out"
+        )
     }
 }
 
@@ -577,7 +601,7 @@ fun RoundedButton(onClick: () -> Unit, text: String) {
 
 
 @Composable
-fun PeriodicMeasurementSending(navController: NavController) {
+fun RealTimeMeasurementSending(navController: NavController) {
     BackgroundPicture()
 
     // Firestore related
@@ -625,7 +649,7 @@ fun PeriodicMeasurementSending(navController: NavController) {
                 .padding(16.dp)
         ) {
             Text(
-                text = "Periodic measurement sending",
+                text = "Real time measurement sending",
                 style = MaterialTheme.typography.headlineLarge
             )
         }
@@ -674,34 +698,28 @@ fun PeriodicMeasurementSending(navController: NavController) {
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        Button(onClick = {
+        RoundedButton(onClick = {
             if (!isSendingData.value) {
                 job = firebaseDataSender.startSendingData()
                 isSendingData.value = true
             }
-        }) {
-            Text("Start sending data")
-        }
+        }, text = "Start sending data")
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(onClick = {
+        RoundedButton(onClick = {
             if (isSendingData.value) {
                 job?.cancel()
                 firebaseDataSender.stopSendingData()
                 isSendingData.value = false
             }
-        }) {
-            Text("Stop sending data")
-        }
+        }, text = "Stop sending data")
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Button(onClick = {
+        RoundedButton(onClick = {
             navController.navigateUp()
-        }) {
-            Text("Go back to measurement select screen")
-        }
+        }, text = "Go back to measurement select screen")
     }
 }
 
@@ -718,12 +736,141 @@ fun BoxWithBackground(content: @Composable () -> Unit) {
     }
 }
 
+
+
 @Composable
-fun UserDefinedIntervalMeasurementSending(navController: NavController){
+fun UserDefinedIntervalMeasurementSending(navController: NavController) {
     BackgroundPicture()
-    Button(onClick = {
-        navController.navigateUp()
-    }) {
-        Text("Go back to measurement select screen")
+
+    // Firestore related
+    val firestore = Firebase.firestore
+    val context = LocalContext.current
+    val sensorDataManager = remember { SensorDataManager(context) }
+    val firebaseDataSender = remember { FireBaseUserIntervalDataSender(firestore, sensorDataManager) }
+    var job: Job? by remember { mutableStateOf(null) }
+
+    LaunchedEffect(Unit) {
+        sensorDataManager.start()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            sensorDataManager.stop()
+            job?.cancel() // Cancel the job when the composable is disposed
+        }
+    }
+
+    val isSendingData = remember { mutableStateOf(false) }
+    val interval = remember { mutableStateOf(5f) } // Default interval set to 5 seconds
+
+    // Collect StateFlow values as State objects
+    val accelerometerData = sensorDataManager.accelerometerData.collectAsState(initial = "")
+    val gyroscopeData = sensorDataManager.gyroscopeData.collectAsState(initial = "")
+    val lightData = sensorDataManager.lightData.collectAsState(initial = "")
+
+    // UI Part
+    BackgroundPicture()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        val timestamp = System.currentTimeMillis() // get current time in milliseconds
+        val formattedTimestamp =
+            SimpleDateFormat("dd-MM-yyyy, HH:mm:ss", Locale.getDefault()).format(timestamp)
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "User-defined interval measurement sending",
+                style = MaterialTheme.typography.headlineLarge
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Slider to set the interval
+        Text(text = "Select Interval (seconds): ${interval.value.toInt()}")
+        Slider(
+            value = interval.value,
+            onValueChange = { interval.value = it },
+            valueRange = 1f..60f, // Range from 1 to 60 seconds
+            steps = 59 // 1 second steps
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        BoxWithBackground {
+            Text(
+                text = accelerometerData.value,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        BoxWithBackground {
+            Text(
+                text = gyroscopeData.value,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        BoxWithBackground {
+            Text(
+                text = lightData.value,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        BoxWithBackground {
+            if (isSendingData.value) {
+                Text(
+                    text = "Status: sending data...",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            } else {
+                Text(
+                    text = "Status: not sending data",
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        RoundedButton(onClick = {
+            if (!isSendingData.value) {
+                job = firebaseDataSender.startSendingData(interval.value.toInt())
+                isSendingData.value = true
+            }
+        }, text = "Start sending data")
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        RoundedButton(onClick = {
+            if (isSendingData.value) {
+                job?.cancel()
+                firebaseDataSender.stopSendingData()
+                isSendingData.value = false
+            }
+        }, text = "Stop sending data")
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        RoundedButton(onClick = {
+            navController.navigateUp()
+        }, text = "Go back to measurement select screen")
     }
 }
+
